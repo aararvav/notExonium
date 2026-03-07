@@ -1,35 +1,31 @@
-const express = require('express');
-const httpProxy = require('http-proxy');
+require('dotenv').config({ path: '../.env' })
+const express = require('express')
+const httpProxy = require('http-proxy')
 
+const app = express()
+const PORT = process.env.PROXY_PORT || 8000
 
+const BASE_PATH = process.env.S3_BASE_PATH || 'https://vercel-clone-outputs.s3.ap-south-1.amazonaws.com/__outputs'
 
-const app = express();
-const PORT = 8000;
+const proxy = httpProxy.createProxy()
 
-const BASE_PATH = 'https://exonium-output.s3.ap-south-1.amazonaws.com/__outputs/';
+app.use((req, res) => {
+    const hostname = req.hostname;
+    const subdomain = hostname.split('.')[0];
 
-const proxy = httpProxy.createProxy();
+    // Custom Domain - DB Query
 
-app.use((req, res) =>
-{
-    const hostName = req.hostname;
-    const subdomain = hostName.split('.')[0];
+    const resolvesTo = `${BASE_PATH}/${subdomain}`
 
+    return proxy.web(req, res, { target: resolvesTo, changeOrigin: true })
 
-    //custom domain using a query for DB
+})
 
-
-    const resolvesTo = `${BASE_PATH}/${subdomain}`;
-
-    return proxy.web(req, res, {target : resolvesTo, changeOrigin : true});
-});
-
-proxy.on('proxyReq', (proxyReq, req, res) => 
-{
+proxy.on('proxyReq', (proxyReq, req, res) => {
     const url = req.url;
     if (url === '/')
         proxyReq.path += 'index.html'
+
 })
 
-
-app.listen(PORT, () => console.log(`Reverse Proxy is running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Reverse Proxy Running..${PORT}`))

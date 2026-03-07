@@ -1,99 +1,93 @@
-require('dotenv').config();
-const express = require('express');
-const {generateSlug} = require('random-word-slugs');
-const {ECSClient, RunTaskCommand} = require('@aws-sdk/client-ecs');
-const {Server} = require('socket.io');
-const Redis = require('ioredis');
+require('dotenv').config({ path: '../.env' })
+const express = require('express')
+const cors = require('cors')
+const { generateSlug } = require('random-word-slugs')
+const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs')
+const { Server } = require('socket.io')
+const Redis = require('ioredis')
 
+const app = express()
+const PORT = process.env.API_PORT || 9000
 
-const subscriber  = new Redis(process.env.REDIS_URL);
+const subscriber = new Redis(process.env.REDIS_URL)
 
-const io = new Server({cors : '*'});
+const io = new Server({ cors: '*' })
 
-io.on('connection', (socket)=>
-{
-    socket.on('subscribe', channel =>
-    {
-        socket.join(channel);
-        socket.emit('message', `Joined ${channel} successfully.`);
+io.on('connection', socket => {
+    socket.on('subscribe', channel => {
+        socket.join(channel)
+        socket.emit('message', JSON.stringify({ log: `Joined ${channel}` }))
     })
-});
+})
 
-io.listen(9001, ()=> console.log('Socket Server is running on port 9001'));
+io.listen(process.env.SOCKET_PORT || 9002, () => console.log(`Socket Server ${process.env.SOCKET_PORT || 9002}`))
 
-const app = express();
-const PORT = 9000;
+const ecsClient = new ECSClient({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
+})
 
-const ecsClient = new ECSClient
-({
-    region : process.env.AWS_REGION,
-    credentials : 
-    {
-        accessKeyId : process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey : process.env.AWS_SECRET_ACCESS_KEY
-    } 
-});
+const config = {
+    CLUSTER: process.env.ECS_CLUSTER,
+    TASK: process.env.ECS_TASK
+}
 
-const config = 
-{
-    CLUSTER : process.env.ECS_CLUSTER,
-    TASK : process.env.ECS_TASK
-};
+app.use(cors())
+app.use(express.json())
 
-app.use(express.json());
+app.post('/project', async (req, res) => {
+    const { gitURL, slug } = req.body
+    const projectSlug = slug ? slug : generateSlug()
 
-app.post('/project', async(req, res) => 
-{
-    const {gitURL, slug} = req.body;
-    const projectSlug = slug ? slug :generateSlug();
-    //spin the container 
-
-    const command = new RunTaskCommand
-    ({
-        cluster : config.CLUSTER,
-        taskDefinition : config.TASK,
-        launchType : 'FARGATE',
-        count : 1,
-        networkConfiguration: 
-        {
-            awsvpcConfiguration:
-            {
-                subnets : ['subnet-0a0c7c25c68c8c642', 'subnet-0bf16160c0e8af08e', 'subnet-0cbabb48bd6f0f57b'],
-                securityGroups: ['sg-0fc983d14c2bf9fdc'],
-                assignPublicIp: 'ENABLED'
+    // Spin the container
+    const command = new RunTaskCommand({
+        cluster: config.CLUSTER,
+        taskDefinition: config.TASK,
+        launchType: 'FARGATE',
+        count: 1,
+        networkConfiguration: {
+            awsvpcConfiguration: {
+                assignPublicIp: 'ENABLED',
+                subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
+                securityGroups: [process.env.SECURITY_GROUP]
             }
         },
-        overrides:
-        {
-            containerOverrides : 
-            [
+        overrides: {
+            containerOverrides: [
                 {
-                    name : 'builder-image',
-                    environment : 
-                    [
-                        {name : 'GIT_REPOSITORY__URL', value : gitURL},
-                        {name : 'PROJECT_ID', value : projectSlug}
+                    name: 'builder-image',
+                    environment: [
+                        { name: 'GIT_REPOSITORY__URL', value: gitURL },
+                        { name: 'PROJECT_ID', value: projectSlug },
+                        { name: 'REDIS_URL', value: process.env.REDIS_URL },
+                        { name: 'AWS_REGION', value: process.env.AWS_REGION },
+                        { name: 'AWS_ACCESS_KEY_ID', value: process.env.AWS_ACCESS_KEY_ID },
+                        { name: 'AWS_SECRET_ACCESS_KEY', value: process.env.AWS_SECRET_ACCESS_KEY },
+                        { name: 'S3_BUCKET_NAME', value: process.env.S3_BUCKET_NAME }
                     ]
                 }
             ]
         }
-    });
+    })
 
     await ecsClient.send(command);
-    return res.json({status: 'queued', data :{projectSlug, url : `https://${projectSlug}.localhost:8000`}});
-});
+
+    return res.json({ status: 'queued', data: { projectSlug, url: `http://${projectSlug}.localhost:8000` } })
+
+})
+
+async function initRedisSubscribe() {
+    console.log('Subscribed to logs....')
+    subscriber.psubscribe('logs:*')
+    subscriber.on('pmessage', (pattern, channel, message) => {
+        io.to(channel).emit('message', message)
+    })
+}
 
 
-async function initRedisSubscribe()
-{
-    console.log("Subscribing to Redis channel...");
-    subscriber.psubscribe(`logs:*`);
-    subscriber.on('pmessage', (pattern, channel, message)=>
-    {
-        io.to(channel).emit('message', message);
-    });
-    console.log("Subscribed to Redis channel.");
-};
+initRedisSubscribe()
 
-initRedisSubscribe();
-app.listen(PORT, () => console.log(`API Server is running on port ${PORT}`));
+app.listen(PORT, () => console.log(`API Server Running..${PORT}`))

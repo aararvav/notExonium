@@ -16,7 +16,9 @@ COPY package*.json .
 
 RUN npm install
 
+# Convert line endings and make executable
+RUN sed -i 's/\r$//' main.sh
 RUN chmod +x main.sh
 RUN chmod +x script.js
 
-ENTRYPOINT [ "/home/app/main.sh" ]
+ENTRYPOINT [ "/bin/bash", "/home/app/main.sh" ]

@@ -1,0 +1,30 @@
+{
+  "comment": "Add these environment variables to your ECS Task Definition (builder-task)",
+  "instructions": [
+    "1. Go to AWS ECS Console",
+    "2. Navigate to Task Definitions > builder-task",
+    "3. Create new revision",
+    "4. In Container Definitions, click on 'builder-image'",
+    "5. Scroll to 'Environment' section",
+    "6. Add these environment variables (NOT in overrides - in the base task definition):"
+  ],
+  "environmentVariables": [
+    {
+      "name": "AWS_REGION",
+      "value": "ap-south-1"
+    },
+    {
+      "name": "AWS_ACCESS_KEY_ID",
+      "value": "<AWS_ACCESS_KEY_ID>"
+    },
+    {
+      "name": "AWS_SECRET_ACCESS_KEY",
+      "value": "<AWS_SECRET_ACCESS_KEY>"
+    },
+    {
+      "name": "REDIS_URL",
+      "value": "rediss://default:<AIVEN_SERVICE_PASSWORD>@<AIVEN_HOST>:<AIVEN_PORT>"
+    }
+  ],
+  "note": "PROJECT_ID and GIT_REPOSITORY__URL are passed via overrides in the API call (already configured in api-server/index.js)"
+}
