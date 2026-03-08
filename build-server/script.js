@@ -1,81 +1,108 @@
-const {exec} = require("child_process");
-const path = require('path');
-const fs  = require('fs');
-const {S3Client, PutObjectCommand} = require('@aws-sdk/client-s3');
-const mime = require('mime-types');
-const Redis = require('ioredis');
+const { exec } = require('child_process')
+const path = require('path')
+const fs = require('fs')
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3')
+const mime = require('mime-types')
+const Redis = require('ioredis')
 
 
-const publisher  = new Redis(process.env.REDIS_URL);
+const publisher = new Redis(process.env.REDIS_URL || '')
 
-const s3Client = new S3Client
-({
-    region : process.env.AWS_REGION,
-    credentials : 
-    {
-        accessKeyId : process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey : process.env.AWS_SECRET_ACCESS_KEY
-    } 
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
 })
 
-const PROJECT_ID = process.env.PROJECT_ID;
+const PROJECT_ID = process.env.PROJECT_ID
 
-function publishLog(log)
-{
-    publisher.publish(`logs:${PROJECT_ID}`, JSON.stringify({log}));
+
+function publishLog(log) {
+    publisher.publish(`logs:${PROJECT_ID}`, JSON.stringify({ log }))
 }
 
-async function init() 
-{
-    console.log("Executing script...");
-    publishLog("Build process started...");
-    const outDirPath =  path.join(__dirname, 'output');
+async function init() {
+    console.log('Executing script.js')
+    publishLog('Build Started...')
+    const outDirPath = path.join(__dirname, 'output')
 
-    const proc = exec(`cd ${outDirPath} && rm -rf node_modules package-lock.json && npm install && npm run build`);
+    const p = exec(`cd ${outDirPath} && npm install && npm run build`)
 
-    proc.stdout.on('data', function(data)
-    {
-        console.log(data.toString());
-        publishLog(data.toString());
-    });
+    p.stdout.on('data', function (data) {
+        console.log(data.toString())
+        publishLog(data.toString())
+    })
 
-    proc.stderr.on('data', function(data)
-    {
-        console.log(data.toString());
-        publishLog(`Error: ${data.toString()}`);
-    });
+    p.stderr.on('data', function (data) {
+        console.log('stderr:', data.toString())
+        publishLog(`stderr: ${data.toString()}`)
+    })
 
-    proc.on('close',async function(){
-        console.log("Build process completed.");
-        publishLog("Build process completed.");
-        const disDirPath = path.join(__dirname, 'output', 'dist');
-        const distDirContents = fs.readdirSync(disDirPath, {recursive: true});
+    p.on('close', async function (code) {
+        console.log('Build Complete')
+        publishLog(`Build Complete`)
         
-        publishLog("Uploading files to S3...");
-        for(const file of distDirContents)
-        {
-            const filePath = path.join(disDirPath, file);
-            if(fs.lstatSync(filePath).isDirectory()) continue;
-
-            console.log(`Uploading ${filePath} to S3...`);
-            publishLog(`Uploading ${file} to S3...`);
-
-            const command  = new PutObjectCommand
-            ({
-                Bucket : 'exonium-output',
-                Key : `__outputs/${PROJECT_ID}/${file}`,
-                Body : fs.createReadStream(filePath),
-                ContentType : mime.lookup(filePath)
-            })
-
-            await s3Client.send(command);
-            publishLog(`Uploaded ${file} to S3.`);
-            console.log(`Uploaded ${filePath} to S3.`);
+        const outputPath = path.join(__dirname, 'output')
+        
+        // Try to find the build output folder (supports Vite, Next.js, CRA, etc.)
+        const possibleDirs = ['dist', '.next/static', '.next', 'build', 'public', 'out', '_build']
+        let distFolderPath = null
+        
+        for (const dir of possibleDirs) {
+            const fullPath = path.join(outputPath, dir)
+            try {
+                if (fs.existsSync(fullPath)) {
+                    distFolderPath = fullPath
+                    publishLog(`Found build output at: ${dir}`)
+                    console.log(`Found build output at: ${dir}`)
+                    break
+                }
+            } catch (e) {
+                // Continue to next
+            }
         }
-        publishLog("Done...");
-        console.log("Done...");
-    });
+        
+        if (!distFolderPath) {
+            publishLog(`ERROR: No build output found. Checked: ${possibleDirs.join(', ')}`)
+            console.error(`ERROR: No build output found. Checked: ${possibleDirs.join(', ')}`)
+            return
+        }
 
+        try {
+            const distFolderContents = fs.readdirSync(distFolderPath, { recursive: true })
+
+            publishLog(`Starting to upload ${distFolderContents.length} files`)
+            
+            let uploadedCount = 0
+            for (const file of distFolderContents) {
+                const filePath = path.join(distFolderPath, file)
+                if (fs.lstatSync(filePath).isDirectory()) continue;
+
+                console.log('uploading', filePath)
+                publishLog(`uploading ${file}`)
+
+                const command = new PutObjectCommand({
+                    Bucket: process.env.S3_BUCKET_NAME,
+                    Key: `__outputs/${PROJECT_ID}/${file}`,
+                    Body: fs.createReadStream(filePath),
+                    ContentType: mime.lookup(filePath)
+                })
+
+                await s3Client.send(command)
+                uploadedCount++
+                publishLog(`uploaded ${file}`)
+                console.log('uploaded', filePath)
+            }
+            publishLog(`Done - Uploaded ${uploadedCount} files`)
+            console.log('Done...')
+        } catch (error) {
+            publishLog(`Upload error: ${error.message}`)
+            console.error('Upload error:', error)
+        }
+    })
 }
 
-init();
+init()
