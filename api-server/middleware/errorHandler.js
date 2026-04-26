@@ -1,7 +1,11 @@
 // Global error handling middleware
 const errorHandler = (err, req, res, next) => {
     console.error(`[Error] ${err.message}`)
-    console.error(err.stack)
+    if (process.env.NODE_ENV !== 'production') {
+        console.error(err.stack)
+    }
+
+    const isProd = process.env.NODE_ENV === 'production'
 
     // Mongoose validation error
     if (err.name === 'ValidationError') {
@@ -12,12 +16,16 @@ const errorHandler = (err, req, res, next) => {
     // Mongoose duplicate key error
     if (err.code === 11000) {
         const field = Object.keys(err.keyValue)[0]
-        return res.status(409).json({ error: `Duplicate value for '${field}'` })
+        return res.status(409).json({
+            error: isProd ? 'Duplicate entry' : `Duplicate value for '${field}'`
+        })
     }
 
     // Mongoose cast error (invalid ObjectId etc.)
     if (err.name === 'CastError') {
-        return res.status(400).json({ error: `Invalid ${err.path}: ${err.value}` })
+        return res.status(400).json({
+            error: isProd ? 'Invalid request parameter' : `Invalid ${err.path}: ${err.value}`
+        })
     }
 
     // JWT errors
@@ -31,7 +39,9 @@ const errorHandler = (err, req, res, next) => {
     // Default
     const statusCode = err.statusCode || 500
     res.status(statusCode).json({
-        error: err.message || 'Internal Server Error'
+        error: isProd && statusCode === 500
+            ? 'Internal Server Error'
+            : (err.message || 'Internal Server Error')
     })
 }
 

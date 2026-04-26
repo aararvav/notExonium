@@ -1,7 +1,11 @@
 require('dotenv').config({ path: '../.env' })
+
+const DEPLOY_BASE_URL = process.env.DEPLOY_BASE_URL || 'localhost:8000'
 const express = require('express')
+const helmet = require('helmet')
 const cors = require('cors')
 const cookieParser = require('cookie-parser')
+const rateLimit = require('express-rate-limit')
 const { generateSlug } = require('random-word-slugs')
 const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs')
 const { Server } = require('socket.io')
@@ -20,6 +24,7 @@ const deploymentRoutes = require('./routes/deployments')
 
 // ── Middleware ───────────────────────────────────────────────────────────
 const errorHandler = require('./middleware/errorHandler')
+const { sanitizeBody, validate, validators } = require('./middleware/validate')
 
 const app = express()
 const PORT = process.env.API_PORT || 9000
@@ -37,6 +42,11 @@ const io = new Server({
 
 io.on('connection', socket => {
     socket.on('subscribe', channel => {
+        // Only allow well-formed log channels: logs:<slug>
+        if (typeof channel !== 'string' || !/^logs:[a-z0-9-]{1,100}$/.test(channel)) {
+            socket.emit('message', JSON.stringify({ log: 'Invalid channel name' }))
+            return
+        }
         socket.join(channel)
         socket.emit('message', JSON.stringify({ log: `Joined ${channel}` }))
     })
@@ -56,12 +66,25 @@ const ecsClient = new ECSClient({
 })
 
 // ── Global Middleware ───────────────────────────────────────────────────
+app.use(helmet())                                 // security headers
 app.use(cors({
     origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
     credentials: true                   // allow cookies cross-origin
 }))
-app.use(express.json())
+app.use(express.json({ limit: '100kb' }))   // reject oversized payloads
+app.use(express.urlencoded({ extended: false, limit: '100kb' }))
 app.use(cookieParser(process.env.COOKIE_SECRET))
+app.use(sanitizeBody)                         // strip HTML from all inputs
+
+// ── Global rate limiter ─────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,   // 15 minutes
+    max: 300,                    // 300 requests per window per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later' }
+})
+app.use(globalLimiter)
 
 // ── Request logger middleware ───────────────────────────────────────────
 app.use((req, res, next) => {
@@ -79,6 +102,15 @@ app.use('/api/deploy', deploymentRoutes)
 app.post('/project', async (req, res, next) => {
     try {
         const { gitURL, slug } = req.body
+
+        // Validate gitURL format
+        const gitError = validators.gitURL(gitURL)
+        if (gitError) return res.status(400).json({ error: gitError })
+
+        // Validate optional slug
+        const slugError = validators.slug(slug)
+        if (slugError) return res.status(400).json({ error: slugError })
+
         const projectSlug = slug ? slug : generateSlug()
 
         // Save deployment to MongoDB
@@ -86,7 +118,7 @@ app.post('/project', async (req, res, next) => {
             slug: projectSlug,
             status: 'queued',
             gitURL,
-            deployURL: `http://${projectSlug}.localhost:8000`
+            deployURL: `http://${projectSlug}.${DEPLOY_BASE_URL}`
         })
 
         // Spin the ECS container
@@ -128,7 +160,7 @@ app.post('/project', async (req, res, next) => {
 
         return res.json({
             status: 'queued',
-            data: { projectSlug, url: `http://${projectSlug}.localhost:8000` }
+            data: { projectSlug, url: `http://${projectSlug}.${DEPLOY_BASE_URL}` }
         })
     } catch (error) {
         next(error)

@@ -35,7 +35,8 @@ export default function LogsPage() {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const deployURL = `http://${projectId}.localhost:8000`;
+  const DEPLOY_BASE = process.env.NEXT_PUBLIC_DEPLOY_BASE_URL || "localhost:8000";
+  const deployURL = `http://${projectId}.${DEPLOY_BASE}`;
 
   const handleSocketIncomingMessage = useCallback((message: unknown) => {
     console.log(`[Incoming Socket Message]:`, message);

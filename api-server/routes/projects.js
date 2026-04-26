@@ -1,6 +1,7 @@
 const express = require('express')
 const Project = require('../models/Project')
 const { protect } = require('../middleware/auth')
+const { validate, validateParamId } = require('../middleware/validate')
 
 const router = express.Router()
 
@@ -8,26 +9,25 @@ const router = express.Router()
 router.use(protect)
 
 // POST /api/projects — create a new project
-router.post('/', async (req, res, next) => {
-    try {
-        const { name, gitURL, customSlug } = req.body
+router.post('/',
+    validate({ name: 'projectName', gitURL: 'gitURL', customSlug: 'slug' }),
+    async (req, res, next) => {
+        try {
+            const { name, gitURL, customSlug } = req.body
 
-        if (!name || !gitURL) {
-            return res.status(400).json({ error: 'Please provide project name and gitURL' })
+            const project = await Project.create({
+                name,
+                gitURL,
+                customSlug: customSlug || undefined,
+                userId: req.user._id
+            })
+
+            res.status(201).json({ success: true, data: project })
+        } catch (error) {
+            next(error)
         }
-
-        const project = await Project.create({
-            name,
-            gitURL,
-            customSlug: customSlug || undefined,
-            userId: req.user._id
-        })
-
-        res.status(201).json({ success: true, data: project })
-    } catch (error) {
-        next(error)
     }
-})
+)
 
 // GET /api/projects — list all projects for the logged-in user
 router.get('/', async (req, res, next) => {
@@ -42,7 +42,7 @@ router.get('/', async (req, res, next) => {
 })
 
 // GET /api/projects/:id — get a single project
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', validateParamId, async (req, res, next) => {
     try {
         const project = await Project.findOne({
             _id: req.params.id,
@@ -60,28 +60,32 @@ router.get('/:id', async (req, res, next) => {
 })
 
 // PUT /api/projects/:id — update a project
-router.put('/:id', async (req, res, next) => {
-    try {
-        const { name, gitURL, customSlug } = req.body
+router.put('/:id',
+    validateParamId,
+    validate({ name: 'projectName', gitURL: 'gitURL', customSlug: 'slug' }),
+    async (req, res, next) => {
+        try {
+            const { name, gitURL, customSlug } = req.body
 
-        const project = await Project.findOneAndUpdate(
-            { _id: req.params.id, userId: req.user._id },
-            { name, gitURL, customSlug },
-            { new: true, runValidators: true }
-        )
+            const project = await Project.findOneAndUpdate(
+                { _id: req.params.id, userId: req.user._id },
+                { name, gitURL, customSlug },
+                { new: true, runValidators: true }
+            )
 
-        if (!project) {
-            return res.status(404).json({ error: 'Project not found' })
+            if (!project) {
+                return res.status(404).json({ error: 'Project not found' })
+            }
+
+            res.json({ success: true, data: project })
+        } catch (error) {
+            next(error)
         }
-
-        res.json({ success: true, data: project })
-    } catch (error) {
-        next(error)
     }
-})
+)
 
 // DELETE /api/projects/:id — delete a project
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', validateParamId, async (req, res, next) => {
     try {
         const project = await Project.findOneAndDelete({
             _id: req.params.id,
