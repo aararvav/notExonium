@@ -2,6 +2,11 @@
 
 Write-Host "Starting all services..." -ForegroundColor Green
 
+# Kill any existing node processes to free ports
+Write-Host "Stopping old processes..." -ForegroundColor Yellow
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force 2>$null
+Start-Sleep -Seconds 1
+
 # Check if Redis is running
 Write-Host "Checking Redis..." -ForegroundColor Cyan
 $redisRunning = Get-Process redis-server -ErrorAction SilentlyContinue
@@ -25,7 +30,7 @@ Start-Sleep -Seconds 2
 
 # Start Frontend
 Write-Host "Starting Frontend on port 3000..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\frontend-nextjs'; npm run dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\frontend-nextjs'; npx next dev"
 
 Write-Host "`nAll services started!" -ForegroundColor Green
 Write-Host "`nServices running at:" -ForegroundColor Yellow

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -305,10 +306,12 @@ export default function Home() {
               <p className="text-gray-500 text-lg mb-8">
                 Join thousands of developers deploying on Exonium
               </p>
-              <Button className="bg-purple-500 hover:bg-purple-600 text-white h-11 px-6 rounded-lg font-medium">
-                Get Started Free
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
+              <Link href="/signup">
+                <Button className="bg-purple-500 hover:bg-purple-600 text-white h-11 px-6 rounded-lg font-medium">
+                  Get Started Free
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
