@@ -70,7 +70,25 @@ router.post('/register',
     }
 )
 
-// POST /api/auth/login
+// POST /api/auth/check-email
+router.post('/check-email',
+    validate({ email: 'email' }),
+    async (req, res, next) => {
+        try {
+            const { email } = req.body
+
+            // Check if user exists
+            const existingUser = await User.findOne({ email: email.toLowerCase() })
+            if (existingUser) {
+                return res.status(409).json({ error: 'Email already registered' })
+            }
+
+            res.json({ success: true, message: 'Email available' })
+        } catch (error) {
+            next(error)
+        }
+    }
+)
 router.post('/login',
     authLimiter,
     validate({ email: 'email', password: 'password' }),

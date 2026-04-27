@@ -1,10 +1,11 @@
-require('dotenv').config({ path: '../.env' })
+require('dotenv').config()
 
 const DEPLOY_BASE_URL = process.env.DEPLOY_BASE_URL || 'localhost:8000'
 const express = require('express')
 const helmet = require('helmet')
 const cors = require('cors')
 const cookieParser = require('cookie-parser')
+const passport = require('passport')
 const rateLimit = require('express-rate-limit')
 const { generateSlug } = require('random-word-slugs')
 const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs')
@@ -19,6 +20,7 @@ const Deployment = require('./models/Deployment')
 
 // ── Route modules ───────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth')
+const oauthRoutes = require('./routes/oauth')
 const projectRoutes = require('./routes/projects')
 const deploymentRoutes = require('./routes/deployments')
 
@@ -74,6 +76,10 @@ app.use(cors({
 app.use(express.json({ limit: '100kb' }))   // reject oversized payloads
 app.use(express.urlencoded({ extended: false, limit: '100kb' }))
 app.use(cookieParser(process.env.COOKIE_SECRET))
+
+// ── Passport initialization ─────────────────────────────────────────────
+app.use(passport.initialize())
+
 app.use(sanitizeBody)                         // strip HTML from all inputs
 
 // ── Global rate limiter ─────────────────────────────────────────────────
@@ -94,6 +100,7 @@ app.use((req, res, next) => {
 
 // ── API Routes ──────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)
+app.use('/api/auth', oauthRoutes)
 app.use('/api/projects', projectRoutes)
 app.use('/api/deploy', deploymentRoutes)
 

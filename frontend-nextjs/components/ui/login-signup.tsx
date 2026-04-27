@@ -21,6 +21,10 @@ import { Separator } from "@/components/ui/separator";
 import { BarChart, Code, Eye, EyeOff, User } from "lucide-react";
 import Link from "next/link";
 import { JSX, SVGProps, useState } from "react";
+import { useAuth } from "@/context/auth-context";
+import { useRouter } from "next/navigation";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
 const Logo = (props: JSX.IntrinsicAttributes & SVGProps<SVGSVGElement>) => (
   <svg
@@ -52,9 +56,39 @@ const GoogleIcon = (
   </svg>
 );
 
+const GitHubIcon = (
+  props: JSX.IntrinsicAttributes & SVGProps<SVGSVGElement>
+) => (
+  <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
+    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+  </svg>
+);
+
 
 export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { register } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      await register(name, email, password);
+      router.push("/");
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex items-center justify-center min-h-screen">
@@ -72,94 +106,83 @@ export function SignupForm() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6 px-8">
-            <div className="space-y-2">
-              <Label htmlFor="role" className="text-zinc-300">Role</Label>
-              <Select defaultValue="designer">
-                <SelectTrigger
-                  id="role"
-                  className="[&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span_svg]:shrink-0 bg-zinc-800/50 border-zinc-700/50 text-white"
-                >
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent className="[&_*[role=option]]:ps-2 [&_*[role=option]]:pe-8 [&_*[role=option]>span]:start-auto [&_*[role=option]>span]:end-2 [&_*[role=option]>span]:flex [&_*[role=option]>span]:items-center [&_*[role=option]>span]:gap-2 [&_*[role=option]>span>svg]:shrink-0 bg-zinc-800 border-zinc-700 text-white">
-                  <SelectItem value="designer">
-                    <User size={16} aria-hidden="true" />
-                    <span className="truncate">Product Designer</span>
-                  </SelectItem>
-                  <SelectItem value="developer">
-                    <Code size={16} aria-hidden="true" />
-                    <span className="truncate">Developer</span>
-                  </SelectItem>
-                  <SelectItem value="manager">
-                    <BarChart size={16} aria-hidden="true" />
-                    <span className="truncate">Product Manager</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <Label htmlFor="firstName" className="text-zinc-300">First name</Label>
-                <Input id="firstName" className="bg-zinc-800/50 border-zinc-700/50 text-white" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName" className="text-zinc-300">Last name</Label>
-                <Input id="lastName" className="bg-zinc-800/50 border-zinc-700/50 text-white" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-zinc-300">Username</Label>
-              <Input id="username" className="bg-zinc-800/50 border-zinc-700/50 text-white" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-zinc-300">Email address</Label>
-              <Input id="email" type="email" className="bg-zinc-800/50 border-zinc-700/50 text-white" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-zinc-300">Password</Label>
-              <div className="relative">
+                <Label htmlFor="name" className="text-zinc-300">Full Name</Label>
                 <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  className="pr-10 bg-zinc-800/50 border-zinc-700/50 text-white"
+                  id="name"
+                  className="bg-zinc-800/50 border-zinc-700/50 text-white"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 text-zinc-400 hover:bg-transparent hover:text-white"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
               </div>
-            </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox id="terms" className="border-zinc-500 data-[state=checked]:bg-zinc-100 data-[state=checked]:text-zinc-900" />
-              <label htmlFor="terms" className="text-sm text-zinc-400">
-                I agree to the{" "}
-                <Link href="#" className="text-white hover:underline">
-                  Terms
-                </Link>{" "}
-                and{" "}
-                <Link href="#" className="text-white hover:underline">
-                  Conditions
-                </Link>
-              </label>
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-zinc-300">Email address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  className="bg-zinc-800/50 border-zinc-700/50 text-white"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
 
-            <Button className="w-full bg-white text-zinc-950 hover:bg-zinc-200">
-              Create free account
-            </Button>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-zinc-300">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    className="pr-10 bg-zinc-800/50 border-zinc-700/50 text-white"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 text-zinc-400 hover:bg-transparent hover:text-white"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {error && (
+                <p className="text-sm text-red-400">{error}</p>
+              )}
+
+              <div className="flex items-center space-x-2">
+                <Checkbox id="terms" className="border-zinc-500 data-[state=checked]:bg-zinc-100 data-[state=checked]:text-zinc-900" />
+                <label htmlFor="terms" className="text-sm text-zinc-400">
+                  I agree to the{" "}
+                  <Link href="#" className="text-white hover:underline">
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="#" className="text-white hover:underline">
+                    Conditions
+                  </Link>
+                </label>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-white text-zinc-950 hover:bg-zinc-200 disabled:opacity-50"
+              >
+                {loading ? "Creating account..." : "Create free account"}
+              </Button>
+            </form>
           </CardContent>
           <CardFooter className="flex justify-center border-t border-zinc-800/50 !py-4">
             <p className="text-center text-sm text-zinc-400">
@@ -176,6 +199,28 @@ export function SignupForm() {
 }
 
 export function Login01() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      await login(email, password);
+      router.push("/");
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="flex flex-1 flex-col justify-center px-4 py-10 lg:px-6">
@@ -183,20 +228,50 @@ export function Login01() {
           <h2 className="text-center text-2xl font-semibold text-white tracking-tight">
             Log in to Exonium
           </h2>
-          <form action="#" method="post" className="mt-8">
-            <Label htmlFor="email" className="font-medium text-zinc-300">
-              Email address
-            </Label>
-            <Input
-              type="email"
-              id="email"
-              name="email"
-              autoComplete="email"
-              placeholder="john@company.com"
-              className="mt-2 bg-zinc-800/50 border-zinc-700/50 text-white placeholder:text-zinc-500"
-            />
-            <Button type="submit" className="mt-6 w-full bg-white text-zinc-950 hover:bg-zinc-200 font-semibold">
-              Sign in with Email
+          <form onSubmit={handleSubmit} className="mt-8">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="email" className="font-medium text-zinc-300">
+                  Email address
+                </Label>
+                <Input
+                  type="email"
+                  id="email"
+                  name="email"
+                  autoComplete="email"
+                  placeholder="john@company.com"
+                  className="mt-2 bg-zinc-800/50 border-zinc-700/50 text-white placeholder:text-zinc-500"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="password" className="font-medium text-zinc-300">
+                  Password
+                </Label>
+                <Input
+                  type="password"
+                  id="password"
+                  name="password"
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  className="mt-2 bg-zinc-800/50 border-zinc-700/50 text-white placeholder:text-zinc-500"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            {error && (
+              <p className="mt-4 text-sm text-red-400">{error}</p>
+            )}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="mt-6 w-full bg-white text-zinc-950 hover:bg-zinc-200 font-semibold disabled:opacity-50"
+            >
+              {loading ? "Signing in..." : "Sign in with Email"}
             </Button>
           </form>
 
@@ -211,16 +286,25 @@ export function Login01() {
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            className="inline-flex w-full items-center justify-center space-x-2 bg-transparent border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            asChild
-          >
-            <a href="#">
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="inline-flex w-full items-center justify-center space-x-2 bg-transparent border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              onClick={() => window.location.href = `${API_URL}/api/auth/google`}
+            >
               <GoogleIcon className="size-5" aria-hidden={true} />
-              <span className="text-sm font-medium">Google</span>
-            </a>
-          </Button>
+              <span className="text-sm font-medium">Continue with Google</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="inline-flex w-full items-center justify-center space-x-2 bg-transparent border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              onClick={() => window.location.href = `${API_URL}/api/auth/github`}
+            >
+              <GitHubIcon className="size-5" aria-hidden={true} />
+              <span className="text-sm font-medium">Continue with GitHub</span>
+            </Button>
+          </div>
 
           <p className="mt-8 text-center text-sm text-zinc-500">
             Don't have an account?{" "}

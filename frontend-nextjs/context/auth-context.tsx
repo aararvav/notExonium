@@ -42,7 +42,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     }
-    checkAuth()
+
+    // Check for OAuth callback
+    const urlParams = new URLSearchParams(window.location.search)
+    const token = urlParams.get('token')
+    const userData = urlParams.get('user')
+
+    if (token && userData) {
+      try {
+        const user = JSON.parse(decodeURIComponent(userData))
+        // The token should already be set as an httpOnly cookie by the server
+        // But we also store it in localStorage for the frontend to use if needed
+        localStorage.setItem('token', token)
+        setUser(user)
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname)
+        setLoading(false)
+      } catch (error) {
+        console.error('Error parsing OAuth callback data:', error)
+        setLoading(false)
+      }
+    } else {
+      checkAuth()
+    }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {

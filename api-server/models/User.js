@@ -19,9 +19,23 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, 'Password is required'],
+        required: function() {
+            // Password is required only if no OAuth provider
+            return !this.googleId && !this.githubId;
+        },
         minlength: 6,
         select: false // don't return password by default in queries
+    },
+    googleId: {
+        type: String,
+        sparse: true
+    },
+    githubId: {
+        type: String,
+        sparse: true
+    },
+    avatar: {
+        type: String
     }
 }, {
     timestamps: true // adds createdAt & updatedAt automatically
